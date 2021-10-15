@@ -17,8 +17,8 @@ Target platform     : Raspberry pi zero, TBD OS
 Peripherals         : MIPI Camera
 Development platform: Raspberry pi 3B+, Raspbian Buster
 Language            : Python 3.7.3 or later
-IDE                 : n/a
-Packages            : TBD
+IDE                 : Thonny Python IDE
+Packages            : picamera
 ===============================================================================
 Version History:
 2021-10-07 JFC V1.00 Initial version
@@ -138,7 +138,11 @@ to control execution:
 a)	cd /etc/init.d
 b)	sudo nano sebcamctrl
 
-Create the following content and save the file afterward:
+Create the following content and save the file afterward (CTRL-O and CTRL-X):
+IMPORTANT NOTE: If you use COPY-PASTE from this header to the new file,
+the quotes '"' might be copied as the wrong caracter. So if you are having
+problems (e.g. you get a "not found" error), make sure to edit the file and
+replace with standard quote characters manually.
 
 #!/bin/sh
 # /etc/init.d/sebcamctrl
@@ -151,15 +155,15 @@ Create the following content and save the file afterward:
 # Short-Description: Controls sebcam.py app. exec.
 # Description:       Controls sebcam.py application execution (CSA STRATOS)
 ### END INIT INFO
-PATHAPP=”/home/seb/sebcam.py &”
-PIDAPP=”/home/seb/sebcam_pid.txt”
+PATHAPP="/home/seb/sebcam.py &"
+PIDAPP="/home/seb/sebcam_pid.txt"
 case $1 in
         start)
-                echo “starting”
+                echo "starting"
                 $PATHAPP
         ;;
         stop)
-                echo “stopping”
+                echo "stopping"
                 PID=$(cat $PIDAPP)
                 kill $PID
         ;;
@@ -184,15 +188,15 @@ lines, so that the process id is recorded in file /home/seb/sebcam_pid.txt
 #!/usr/bin/env python3
 import os
 pid = os.getpid()
-op  = open(“/home/seb/sebcam_pid.txt”)
-op.write(“%s” % pid)
+op  = open("/home/seb/sebcam_pid.txt")
+op.write("%s" % pid)
 op.close()
 
 When the system reboots, sebcamctrl should run.
 If you need to stop it:
-/etc/init.d/sebcamctrl stop
+sudo /etc/init.d/sebcamctrl stop
 To start it again:
-/etc/init.d/mysebcamctrl start &
+sudo /etc/init.d/sebcamctrl start &
 To remove the service (i.e. prevent automatic startup):
 a)	cd /etc/init.d/
 b)	Remove sebcamctrl
@@ -212,15 +216,22 @@ from picamera import PiCamera
 # ---------------------------------------- #
 VERSION_STRING = "SEBCAM V1.01"
 
+# ---------------------------------------- #
+# PATHS: Very important to setup correctly #
+# Folders must ALREADY exist!!             #
+# ---------------------------------------- #
+PATH_EXEC = "/home/seb/"
+PATH_IMAGES = "/home/seb/images/"
+PATH_VIDEOS = "/home/seb/videos/"
+
 # ----------------------------------- #
 # Needed for init.d execution control #
 # MUST CORRESPOND TO INIT.D SETUP,    #
 # SEE INFOS IN HEADER!!!!             #
 # ----------------------------------- #
 pid = os.getpid()
-# op  = open(“/home/seb/sebcam_pid.txt”) #Uncomment to specify absolute path
-op  = open(“sebcam_pid.txt”)
-op.write(“%s” % pid)
+op  = open(PATH_EXEC+"sebcam_pid.txt","w")
+op.write("%s" % pid)
 op.close()
 
 # ---------------------------------- #
@@ -228,20 +239,20 @@ op.close()
 # Comment out one of these sections: #
 # ---------------------------------- #
 ACTION = "TAKE_VIDEOS"
-LENGTH_OF_VIDEOS_SECONDS = 30 
+LENGTH_OF_VIDEOS_SECONDS = 10 
 NUMBER_OF_VIDEOS = 0 #Put '0' for infinite
-SECONDS_BETWEEN_VIDEOS = 1
+SECONDS_BETWEEN_VIDEOS = 10
 # ---------------------------------- #
 # ACTION = "TAKE_IMAGES"
 # NUMBER_OF_IMAGES = 0 # Put '0' for infinite
-# SECONDS_BETWEEN_IMAGES = 30
+# SECONDS_BETWEEN_IMAGES = 20
 # ---------------------------------- #
 
 # -------------------------------------- #
 # Power up the camera and let it warm up #
 # -------------------------------------- #
 camera = PiCamera()
-camera.start_preview()
+# camera.start_preview()
 sleep(2) # Camera warm-up time
 
 # ---------------------------------- #
@@ -257,7 +268,7 @@ if ACTION == "TAKE_IMAGES":
         print(f"Configured to take {NUMBER_OF_IMAGES} images, one every {SECONDS_BETWEEN_IMAGES} second(s)")
     camera.resolution = (1024, 768)   #Comment out to use default resolution
     currentImageIndex = 1
-    for filename in camera.capture_continuous('img{timestamp:%Y-%m-%dT%H:%M:%S}.jpg'):
+    for filename in camera.capture_continuous(PATH_IMAGES+'img{timestamp:%Y-%m-%dT%H:%M:%S}.jpg'):
         print('captured %s' % filename)
         sleep(SECONDS_BETWEEN_IMAGES)
         if( (currentImageIndex >= NUMBER_OF_IMAGES) and (NUMBER_OF_IMAGES != 0) ):
@@ -274,7 +285,7 @@ elif ACTION == "TAKE_VIDEOS":
     camera.resolution = (640, 480)    #Comment out to use default resolution
     currentVideoIndex = 1
     while True:
-        filename = "vid_"+strftime("%Y-%m-%d_%H:%M:%S")+".h264"
+        filename = PATH_VIDEOS+"vid_"+strftime("%Y-%m-%d_%H:%M:%S")+".h264"
         camera.start_recording(filename)
         camera.wait_recording(LENGTH_OF_VIDEOS_SECONDS)
         camera.stop_recording()
