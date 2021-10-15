@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # ########################################################################### #
 #         _____ ___________   _____   ___  ___  ___ ___________  ___          #
 #        /  ___|  ___| ___ \ /  __ \ / _ \ |  \/  ||  ___| ___ \/ _ \         #
@@ -21,6 +22,7 @@ Packages            : TBD
 ===============================================================================
 Version History:
 2021-10-07 JFC V1.00 Initial version
+2021-10-15 JFC V1.01 Added necessary stuff for init.d execution control
 ===============================================================================
 TODO:
 - Import settings from a configuration file
@@ -119,8 +121,88 @@ camera = PiCamera()
 camera.start_recording('tstvid.h264')
 camera.wait_recording(30)
 camera.stop_recording()
+
+
+Setup for AUTOMATIC STARTUP when Pi boots up
+--------------------------------------------
+Using init.d (System V): The directory /etc/init.d contains the scripts that are 
+used to start the services at boot time. They must be formatted as Linux Standard 
+Base (LSB) i.e. have a standard header filled with information (e.g. dependencies, 
+description). The command update.rc will configure the system with these scripts 
+(i.e. it is NOT the script contained in this folder that are directly executed).
+
+For this setup example, we’ll assume that this script is located at
+“/home/seb/sebcam.py” and that a script called "sebcamctrl" will be created
+to control execution:
+
+a)	cd /etc/init.d
+b)	sudo nano sebcamctrl
+
+Create the following content and save the file afterward:
+
+#!/bin/sh
+# /etc/init.d/sebcamctrl
+### BEGIN INIT INFO
+# Provides:        sebcamctrl
+# Required-Start:  $local_fs $network $remote_fs $syslog $time
+# Required-Stop:   $local_fs $network $remote_fs $syslog $time
+# Default-Start:   2 3 4 5
+# Default-Stop:    0 1 6
+# Short-Description: Controls sebcam.py app. exec.
+# Description:       Controls sebcam.py application execution (CSA STRATOS)
+### END INIT INFO
+PATHAPP=”/home/seb/sebcam.py &”
+PIDAPP=”/home/seb/sebcam_pid.txt”
+case $1 in
+        start)
+                echo “starting”
+                $PATHAPP
+        ;;
+        stop)
+                echo “stopping”
+                PID=$(cat $PIDAPP)
+                kill $PID
+        ;;
+esac
+
+c)	sudo chmod +x sebcamctrl
+d)	sudo update-rc.d sebcamctrl defaults
+e)	sudo reboot
+
+Notes:
+•	$local_fs = All local files are mounted
+•	$network = Low level networking is initialized
+•	$remote_fs = All file systems are mounted (includes $local_fs)
+•	$syslog = System logger is operational
+•	$time = The system time has been set
+•	Note that another script could wait for this script to be initialized
+by specifying $sebcamctrl (TBC if we need the “$” here).
+
+Note that the sebcam Python script must start with the following
+lines, so that the process id is recorded in file /home/seb/sebcam_pid.txt
+(it was done for version V1.01):
+#!/usr/bin/env python3
+import os
+pid = os.getpid()
+op  = open(“/home/seb/sebcam_pid.txt”)
+op.write(“%s” % pid)
+op.close()
+
+When the system reboots, sebcamctrl should run.
+If you need to stop it:
+/etc/init.d/sebcamctrl stop
+To start it again:
+/etc/init.d/mysebcamctrl start &
+To remove the service (i.e. prevent automatic startup):
+a)	cd /etc/init.d/
+b)	Remove sebcamctrl
+c)	sudo update-rc.d sebcamctrl remove
+Note: the fact that “sebcamctrl” is not in the folder anymore is of no
+concern: update-rc clears all occurences of myscript in the startup 
+configuration files (it was copied there by update-rc sebcamctrl defaults)
 ===============================================================================
 """
+import os
 from time import strftime
 from time import sleep
 from picamera import PiCamera
@@ -128,7 +210,18 @@ from picamera import PiCamera
 # ---------------------------------------- #
 # Software version identifier - Increment! #
 # ---------------------------------------- #
-VERSION_STRING = "SEBCAM V1.00"
+VERSION_STRING = "SEBCAM V1.01"
+
+# ----------------------------------- #
+# Needed for init.d execution control #
+# MUST CORRESPOND TO INIT.D SETUP,    #
+# SEE INFOS IN HEADER!!!!             #
+# ----------------------------------- #
+pid = os.getpid()
+# op  = open(“/home/seb/sebcam_pid.txt”) #Uncomment to specify absolute path
+op  = open(“sebcam_pid.txt”)
+op.write(“%s” % pid)
+op.close()
 
 # ---------------------------------- #
 #             S E T U P              #
